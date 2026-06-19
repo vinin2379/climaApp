@@ -1,7 +1,10 @@
 package com.example.climaoff;
 
 import android.os.Bundle;
+import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -12,8 +15,13 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private DatabaseHelper dbHelper;
-    private TextView tvCidade, tvData, tvTemperaturaAtual, tvDescricao, tvUmidade, tvVento, tvMinMax, tvIconePrincipal;
+    private WeatherRepository repository;
+
+    // Views
+    private TextView    tvCidade, tvData, tvTemperaturaAtual,
+                        tvDescricao, tvUmidade, tvVento, tvMinMax, tvIconePrincipal,
+                        tvStatusOffline;
+    private ProgressBar progressBar;
     private RecyclerView rvPrevisoes;
     private PrevisaoAdapter adapter;
 
@@ -22,61 +30,97 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        dbHelper = new DatabaseHelper(this);
+        repository = new WeatherRepository(this);
+
         inicializarComponentes();
         configurarRecyclerView();
-        
-        // Carregar dados (insere mock se estiver vazio para demonstração)
-        carregarDados();
+        buscarDados();
     }
 
     private void inicializarComponentes() {
-        tvCidade = findViewById(R.id.tvCidade);
-        tvData = findViewById(R.id.tvData);
+        tvCidade           = findViewById(R.id.tvCidade);
+        tvData             = findViewById(R.id.tvData);
         tvTemperaturaAtual = findViewById(R.id.tvTemperaturaAtual);
-        tvDescricao = findViewById(R.id.tvDescricao);
-        tvUmidade = findViewById(R.id.tvUmidade);
-        tvVento = findViewById(R.id.tvVento);
-        tvMinMax = findViewById(R.id.tvMinMax);
-        tvIconePrincipal = findViewById(R.id.tvIconePrincipal);
-        rvPrevisoes = findViewById(R.id.rvPrevisoes);
+        tvDescricao        = findViewById(R.id.tvDescricao);
+        tvUmidade          = findViewById(R.id.tvUmidade);
+        tvVento            = findViewById(R.id.tvVento);
+        tvMinMax           = findViewById(R.id.tvMinMax);
+        tvIconePrincipal   = findViewById(R.id.tvIconePrincipal);
+        progressBar        = findViewById(R.id.progressBar);
+        tvStatusOffline    = findViewById(R.id.tvStatusOffline);
+        rvPrevisoes        = findViewById(R.id.rvPrevisoes);
     }
 
     private void configurarRecyclerView() {
         rvPrevisoes.setLayoutManager(new LinearLayoutManager(this));
     }
 
-    private void carregarDados() {
-        List<Previsao> lista = dbHelper.listarTodos();
+    /**
+     * Inicia a busca de dados via repositório.
+     * O repositório decide automaticamente entre API ou cache offline.
+     */
+    private void buscarDados() {
+        mostrarLoading(true);
+        tvStatusOffline.setVisibility(View.GONE);
 
-        if (lista.isEmpty()) {
-            // Criar dados de exemplo se o banco estiver vazio
-            dbHelper.inserir(new Previsao("São Paulo", "Hoje, 03 Jun", 18.0, 28.0, 24.0, "Céu Limpo", "01d", 65, 12.0));
-            dbHelper.inserir(new Previsao("São Paulo", "Amanhã, 04 Jun", 17.0, 26.0, 22.0, "Parcialmente Nublado", "02d", 70, 10.0));
-            dbHelper.inserir(new Previsao("São Paulo", "Qui, 05 Jun", 16.0, 24.0, 20.0, "Chuva Leve", "10d", 85, 15.0));
-            dbHelper.inserir(new Previsao("São Paulo", "Sex, 06 Jun", 15.0, 22.0, 19.0, "Nublado", "03d", 80, 8.0));
-            lista = dbHelper.listarTodos();
-        }
+        repository.buscarPrevisoes(new WeatherRepository.Callback() {
+            @Override
+            public void onSuccess(List<Previsao> previsoes, boolean fromCache) {
+                mostrarLoading(false);
 
-        if (!lista.isEmpty()) {
-            // Exibir a primeira previsão como "Clima Atual"
-            Previsao atual = lista.get(0);
-            tvCidade.setText(atual.getCidade());
-            tvData.setText(atual.getData());
-            tvTemperaturaAtual.setText(String.format("%.0f°C", atual.getTemperaturaAtual()));
-            tvDescricao.setText(atual.getDescricao());
-            tvUmidade.setText(atual.getUmidade() + "%");
-            tvVento.setText(atual.getVento() + " km/h");
-            tvMinMax.setText(String.format("%.0f° / %.0f°", atual.getTemperaturaMin(), atual.getTemperaturaMax()));
-            tvIconePrincipal.setText(converterIconeParaEmoji(atual.getIcone()));
+                if (fromCache) {
+                    tvStatusOffline.setVisibility(View.VISIBLE);
+                    tvStatusOffline.setText("⚠️ Modo offline — exibindo dados em cache");
+                    Toast.makeText(MainActivity.this,
+                            "Sem conexão. Exibindo dados salvos.", Toast.LENGTH_LONG).show();
+                }
 
-            // O restante vai para a lista (RecyclerView)
-            List<Previsao> proximosDias = new ArrayList<>(lista);
-            proximosDias.remove(0); // Remove o "atual" da lista de próximos
-            
+                exibirPrevisoes(previsoes);
+            }
+
+            @Override
+            public void onError(String mensagem) {
+                mostrarLoading(false);
+                tvStatusOffline.setVisibility(View.VISIBLE);
+                tvStatusOffline.setText("❌ " + mensagem);
+                Toast.makeText(MainActivity.this, mensagem, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    /**
+     * Preenche a UI com os dados recebidos.
+     */
+    private void exibirPrevisoes(List<Previsao> lista) {
+        if (lista.isEmpty()) return;
+
+        // Primeiro item = clima atual
+        Previsao atual = lista.get(0);
+        tvCidade.setText(atual.getCidade());
+        tvData.setText(atual.getData());
+        tvTemperaturaAtual.setText(String.format("%.0f°C", atual.getTemperaturaAtual()));
+        tvDescricao.setText(atual.getDescricao());
+        tvUmidade.setText(atual.getUmidade() + "%");
+        tvVento.setText(String.format("%.0f km/h", atual.getVento()));
+        tvMinMax.setText(String.format("%.0f° / %.0f°",
+                atual.getTemperaturaMin(), atual.getTemperaturaMax()));
+        tvIconePrincipal.setText(converterIconeParaEmoji(atual.getIcone()));
+
+        // Próximos dias na RecyclerView
+        List<Previsao> proximosDias = new ArrayList<>(lista);
+        if (!proximosDias.isEmpty()) proximosDias.remove(0);
+
+        if (adapter == null) {
             adapter = new PrevisaoAdapter(proximosDias);
             rvPrevisoes.setAdapter(adapter);
+        } else {
+            adapter.atualizarDados(proximosDias);
         }
+    }
+
+    private void mostrarLoading(boolean mostrar) {
+        progressBar.setVisibility(mostrar ? View.VISIBLE : View.GONE);
+        rvPrevisoes.setVisibility(mostrar ? View.GONE : View.VISIBLE);
     }
 
     private String converterIconeParaEmoji(String icone) {

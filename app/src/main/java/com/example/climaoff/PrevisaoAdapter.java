@@ -18,6 +18,12 @@ public class PrevisaoAdapter extends RecyclerView.Adapter<PrevisaoAdapter.ViewHo
         this.previsoes = previsoes;
     }
 
+    /** Substitui a lista e notifica o RecyclerView para re-renderizar. */
+    public void atualizarDados(List<Previsao> novasPrevisoes) {
+        this.previsoes = novasPrevisoes;
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -31,12 +37,13 @@ public class PrevisaoAdapter extends RecyclerView.Adapter<PrevisaoAdapter.ViewHo
         Previsao previsao = previsoes.get(position);
         holder.tvData.setText(previsao.getData());
         holder.tvIcone.setText(converterIconeParaEmoji(previsao.getIcone()));
-        holder.tvMinMax.setText(String.format("%.0f° / %.0f°", previsao.getTemperaturaMin(), previsao.getTemperaturaMax()));
+        holder.tvMinMax.setText(String.format("%.0f° / %.0f°",
+                previsao.getTemperaturaMin(), previsao.getTemperaturaMax()));
     }
 
     @Override
     public int getItemCount() {
-        return previsoes.size();
+        return previsoes != null ? previsoes.size() : 0;
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
@@ -44,14 +51,13 @@ public class PrevisaoAdapter extends RecyclerView.Adapter<PrevisaoAdapter.ViewHo
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
-            tvData = itemView.findViewById(R.id.tvItemData);
+            tvData  = itemView.findViewById(R.id.tvItemData);
             tvIcone = itemView.findViewById(R.id.tvItemIcone);
             tvMinMax = itemView.findViewById(R.id.tvItemMinMax);
         }
     }
 
     private String converterIconeParaEmoji(String icone) {
-        // Mapeamento simples de ícones OpenWeather para Emojis
         if (icone == null) return "☀️";
         switch (icone) {
             case "01d": case "01n": return "☀️";

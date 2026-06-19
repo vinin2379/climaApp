@@ -13,6 +13,29 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- Banner de status offline -->
+        <TextView
+            android:id="@+id/tvStatusOffline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:background="#FFF3CD"
+            android:padding="10dp"
+            android:text=""
+            android:textColor="#856404"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- Loading -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="64dp"
+            android:layout_marginBottom="64dp"
+            android:visibility="visible" />
+
         <!-- Cidade e Data -->
         <TextView
             android:id="@+id/tvCidade"
@@ -52,7 +75,7 @@
                 android:id="@+id/tvTemperaturaAtual"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="24°C"
+                android:text="--°C"
                 android:textColor="@color/text_primary"
                 android:textSize="64sp"
                 android:textStyle="bold" />
@@ -61,7 +84,7 @@
                 android:id="@+id/tvDescricao"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Céu Limpo"
+                android:text="Carregando..."
                 android:textColor="@color/text_secondary"
                 android:textSize="18sp"
                 android:textAllCaps="true" />
@@ -99,7 +122,7 @@
                         android:id="@+id/tvUmidade"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="65%"
+                        android:text="--"
                         android:textColor="@color/text_primary"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -120,7 +143,7 @@
                         android:id="@+id/tvVento"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="12 km/h"
+                        android:text="--"
                         android:textColor="@color/text_primary"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -141,7 +164,7 @@
                         android:id="@+id/tvMinMax"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="18° / 28°"
+                        android:text="--"
                         android:textColor="@color/text_primary"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -165,6 +188,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:nestedScrollingEnabled="false"
+            android:visibility="gone"
             tools:listitem="@layout/item_previsao" />
 
     </LinearLayout>
