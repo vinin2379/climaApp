@@ -3,13 +3,15 @@ package com.example.climaoff;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import java.util.List;
 
 /**
  * Camada de repositório que decide de onde buscar os dados:
- *  - Online  → WeatherService (API) → salva no SQLite → retorna dados
+ *  - Online  → GeocodingService (nome → coords) → WeatherService (API) → SQLite → retorna dados
  *  - Offline → SQLite (cache local) → retorna dados
  *
  * Deve ser executado em thread secundária (usa callback para retornar ao UI thread).
@@ -21,6 +23,8 @@ public class WeatherRepository {
     private final Context context;
     private final DatabaseHelper dbHelper;
     private final WeatherService weatherService;
+    private final GeocodingService geocodingService;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public interface Callback {
         /** Chamado na UI thread com os dados prontos. */
@@ -30,23 +34,47 @@ public class WeatherRepository {
     }
 
     public WeatherRepository(Context context) {
-        this.context        = context.getApplicationContext();
-        this.dbHelper       = new DatabaseHelper(context);
-        this.weatherService = new WeatherService();
+        this.context          = context.getApplicationContext();
+        this.dbHelper         = new DatabaseHelper(context);
+        this.weatherService   = new WeatherService();
+        this.geocodingService = new GeocodingService();
     }
 
     /**
-     * Busca previsões para São Paulo.
-     * Executa em background thread e devolve resultado via callback na UI thread.
+     * Busca previsões para São Paulo (padrão).
      */
     public void buscarPrevisoes(Callback callback) {
-        buscarPrevisoes("São Paulo", -23.5505, -46.6333, callback);
+        buscarPrevisoesPorCoordenadas("São Paulo", -23.5505, -46.6333, callback);
     }
 
     /**
-     * Busca previsões para a cidade/coordenadas fornecidas.
+     * Busca previsões a partir de um nome de cidade digitado pelo usuário.
+     * Faz geocoding primeiro para obter lat/lon, depois busca o clima.
      */
-    public void buscarPrevisoes(String cidade, double lat, double lon, Callback callback) {
+    public void buscarPrevisoesPorNome(String nomeCidade, Callback callback) {
+        new Thread(() -> {
+            if (!isOnline()) {
+                Log.d(TAG, "Offline — usando cache local");
+                buscarDoCache(callback);
+                return;
+            }
+
+            // Geocoding: nome → coordenadas
+            GeocodingService.ResultadoGeo geo = geocodingService.buscarCoordenadas(nomeCidade);
+
+            if (geo == null) {
+                notificarErro(callback, "Cidade \"" + nomeCidade + "\" não encontrada. Verifique o nome e tente novamente.");
+                return;
+            }
+
+            buscarDaApi(geo.nomeExibicao, geo.latitude, geo.longitude, callback);
+        }).start();
+    }
+
+    /**
+     * Busca previsões para coordenadas já conhecidas.
+     */
+    public void buscarPrevisoesPorCoordenadas(String cidade, double lat, double lon, Callback callback) {
         new Thread(() -> {
             if (isOnline()) {
                 Log.d(TAG, "Dispositivo online — buscando da API");
@@ -66,7 +94,6 @@ public class WeatherRepository {
         List<Previsao> previsoes = weatherService.buscarPrevisao(cidade, lat, lon);
 
         if (previsoes != null && !previsoes.isEmpty()) {
-            // Limpa dados antigos e salva os novos no banco
             salvarNoBanco(previsoes);
             notificarSucesso(callback, previsoes, false);
         } else {
@@ -87,15 +114,9 @@ public class WeatherRepository {
 
     /**
      * Apaga todas as previsões antigas e insere as novas.
-     * Mantém o banco sempre atualizado com a consulta mais recente.
      */
     private void salvarNoBanco(List<Previsao> previsoes) {
-        // Remove todos os registros antigos
-        List<Previsao> antigos = dbHelper.listarTodos();
-        for (Previsao p : antigos) {
-            dbHelper.deletar(p.getId());
-        }
-        // Insere os novos
+        dbHelper.deletarTodos();
         for (Previsao p : previsoes) {
             dbHelper.inserir(p);
         }
@@ -109,10 +130,6 @@ public class WeatherRepository {
         NetworkInfo netInfo = cm.getActiveNetworkInfo();
         return netInfo != null && netInfo.isConnected();
     }
-
-    // Garante que o callback é chamado na UI thread
-    private android.os.Handler mainHandler = new android.os.Handler(
-            android.os.Looper.getMainLooper());
 
     private void notificarSucesso(Callback callback, List<Previsao> lista, boolean fromCache) {
         mainHandler.post(() -> callback.onSuccess(lista, fromCache));

@@ -13,6 +13,40 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- Barra de busca por cidade -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <EditText
+                android:id="@+id/etBuscaCidade"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@color/card_bg"
+                android:hint="Buscar cidade..."
+                android:textColorHint="@color/text_secondary"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:inputType="textCapWords"
+                android:imeOptions="actionSearch"
+                android:singleLine="true" />
+
+            <Button
+                android:id="@+id/btnBuscar"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:text="Buscar"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
         <!-- Banner de status offline -->
         <TextView
             android:id="@+id/tvStatusOffline"

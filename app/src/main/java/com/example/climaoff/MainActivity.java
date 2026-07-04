@@ -1,7 +1,12 @@
 package com.example.climaoff;
 
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -18,6 +23,8 @@ public class MainActivity extends AppCompatActivity {
     private WeatherRepository repository;
 
     // Views
+    private EditText    etBuscaCidade;
+    private Button      btnBuscar;
     private TextView    tvCidade, tvData, tvTemperaturaAtual,
                         tvDescricao, tvUmidade, tvVento, tvMinMax, tvIconePrincipal,
                         tvStatusOffline;
@@ -33,11 +40,16 @@ public class MainActivity extends AppCompatActivity {
         repository = new WeatherRepository(this);
 
         inicializarComponentes();
+        configurarBusca();
         configurarRecyclerView();
-        buscarDados();
+
+        // Carrega São Paulo como cidade padrão na abertura
+        buscarPorCoordenadas("São Paulo", -23.5505, -46.6333);
     }
 
     private void inicializarComponentes() {
+        etBuscaCidade      = findViewById(R.id.etBuscaCidade);
+        btnBuscar          = findViewById(R.id.btnBuscar);
         tvCidade           = findViewById(R.id.tvCidade);
         tvData             = findViewById(R.id.tvData);
         tvTemperaturaAtual = findViewById(R.id.tvTemperaturaAtual);
@@ -51,19 +63,51 @@ public class MainActivity extends AppCompatActivity {
         rvPrevisoes        = findViewById(R.id.rvPrevisoes);
     }
 
+    private void configurarBusca() {
+        // Botão de busca
+        btnBuscar.setOnClickListener(v -> executarBuscaPorNome());
+
+        // Teclado: tecla "Buscar" / Enter no campo de texto
+        etBuscaCidade.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH
+                    || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                executarBuscaPorNome();
+                return true;
+            }
+            return false;
+        });
+    }
+
+    private void executarBuscaPorNome() {
+        String nomeCidade = etBuscaCidade.getText().toString().trim();
+
+        if (nomeCidade.isEmpty()) {
+            Toast.makeText(this, "Digite o nome de uma cidade.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Fecha o teclado
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(etBuscaCidade.getWindowToken(), 0);
+
+        mostrarLoading(true);
+        tvStatusOffline.setVisibility(View.GONE);
+
+        repository.buscarPrevisoesPorNome(nomeCidade, criarCallback());
+    }
+
+    private void buscarPorCoordenadas(String cidade, double lat, double lon) {
+        mostrarLoading(true);
+        tvStatusOffline.setVisibility(View.GONE);
+        repository.buscarPrevisoesPorCoordenadas(cidade, lat, lon, criarCallback());
+    }
+
     private void configurarRecyclerView() {
         rvPrevisoes.setLayoutManager(new LinearLayoutManager(this));
     }
 
-    /**
-     * Inicia a busca de dados via repositório.
-     * O repositório decide automaticamente entre API ou cache offline.
-     */
-    private void buscarDados() {
-        mostrarLoading(true);
-        tvStatusOffline.setVisibility(View.GONE);
-
-        repository.buscarPrevisoes(new WeatherRepository.Callback() {
+    private WeatherRepository.Callback criarCallback() {
+        return new WeatherRepository.Callback() {
             @Override
             public void onSuccess(List<Previsao> previsoes, boolean fromCache) {
                 mostrarLoading(false);
@@ -85,12 +129,9 @@ public class MainActivity extends AppCompatActivity {
                 tvStatusOffline.setText("❌ " + mensagem);
                 Toast.makeText(MainActivity.this, mensagem, Toast.LENGTH_LONG).show();
             }
-        });
+        };
     }
 
-    /**
-     * Preenche a UI com os dados recebidos.
-     */
     private void exibirPrevisoes(List<Previsao> lista) {
         if (lista.isEmpty()) return;
 

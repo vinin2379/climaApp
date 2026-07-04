@@ -128,13 +128,20 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rows;
     }
 
-    // DELETE
+    // DELETE por id
     public int deletar(int id) {
         SQLiteDatabase db = getWritableDatabase();
         int rows = db.delete(TABELA, COL_ID + " = ?",
                 new String[]{String.valueOf(id)});
         db.close();
         return rows;
+    }
+
+    // DELETE todos (mais eficiente que deletar um por um)
+    public void deletarTodos() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete(TABELA, null, null);
+        db.close();
     }
 
     // Converte Cursor → Previsao
