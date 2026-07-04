@@ -14,11 +14,16 @@ import java.util.List;
  *  - Online  → GeocodingService (nome → coords) → WeatherService (API) → SQLite → retorna dados
  *  - Offline → SQLite (cache local) → retorna dados
  *
+ * Guarda em cache as últimas MAX_CIDADES_CACHE cidades pesquisadas
+ * (cada uma com seu próprio conjunto de previsões), permitindo acesso
+ * rápido offline às últimas cidades consultadas.
+ *
  * Deve ser executado em thread secundária (usa callback para retornar ao UI thread).
  */
 public class WeatherRepository {
 
     private static final String TAG = "WeatherRepository";
+    private static final int MAX_CIDADES_CACHE = 3;
 
     private final Context context;
     private final DatabaseHelper dbHelper;
@@ -31,6 +36,11 @@ public class WeatherRepository {
         void onSuccess(List<Previsao> previsoes, boolean fromCache);
         /** Chamado na UI thread quando há falha total (sem dados nem offline). */
         void onError(String mensagem);
+    }
+
+    public interface ResumoCallback {
+        /** Chamado na UI thread com o resumo (1 item por cidade) das últimas cidades pesquisadas. */
+        void onResumo(List<Previsao> resumos);
     }
 
     public WeatherRepository(Context context) {
@@ -55,7 +65,7 @@ public class WeatherRepository {
         new Thread(() -> {
             if (!isOnline()) {
                 Log.d(TAG, "Offline — usando cache local");
-                buscarDoCache(callback);
+                buscarDoCachePorNomeAproximado(nomeCidade, callback);
                 return;
             }
 
@@ -81,8 +91,34 @@ public class WeatherRepository {
                 buscarDaApi(cidade, lat, lon, callback);
             } else {
                 Log.d(TAG, "Dispositivo offline — usando cache local");
-                buscarDoCache(callback);
+                buscarDoCachePorNomeAproximado(cidade, callback);
             }
+        }).start();
+    }
+
+    /**
+     * Busca as previsões de uma cidade específica diretamente do cache local
+     * (usado ao tocar em um dos "chips" de últimas cidades pesquisadas).
+     */
+    public void buscarPrevisoesDoCache(String cidade, Callback callback) {
+        new Thread(() -> {
+            List<Previsao> previsoes = dbHelper.listarPorCidade(cidade);
+            if (previsoes != null && !previsoes.isEmpty()) {
+                notificarSucesso(callback, previsoes, true);
+            } else {
+                notificarErro(callback, "Dados não encontrados no cache para essa cidade.");
+            }
+        }).start();
+    }
+
+    /**
+     * Retorna um resumo (1 item por cidade) das últimas cidades pesquisadas,
+     * para exibir como atalhos rápidos na tela inicial.
+     */
+    public void buscarResumoCidadesRecentes(ResumoCallback callback) {
+        new Thread(() -> {
+            List<Previsao> resumos = dbHelper.listarResumoCidadesRecentes(MAX_CIDADES_CACHE);
+            mainHandler.post(() -> callback.onResumo(resumos));
         }).start();
     }
 
@@ -94,14 +130,15 @@ public class WeatherRepository {
         List<Previsao> previsoes = weatherService.buscarPrevisao(cidade, lat, lon);
 
         if (previsoes != null && !previsoes.isEmpty()) {
-            salvarNoBanco(previsoes);
+            salvarNoBanco(cidade, previsoes);
             notificarSucesso(callback, previsoes, false);
         } else {
             Log.w(TAG, "API retornou vazio — tentando cache local");
-            buscarDoCache(callback);
+            buscarDoCachePorNomeAproximado(cidade, callback);
         }
     }
 
+    /** Cache antigo (usado quando falha achar exatamente a cidade pedida): pega qualquer dado salvo. */
     private void buscarDoCache(Callback callback) {
         List<Previsao> previsoes = dbHelper.listarTodos();
 
@@ -112,15 +149,30 @@ public class WeatherRepository {
         }
     }
 
-    /**
-     * Apaga todas as previsões antigas e insere as novas.
-     */
-    private void salvarNoBanco(List<Previsao> previsoes) {
-        dbHelper.deletarTodos();
-        for (Previsao p : previsoes) {
-            dbHelper.inserir(p);
+    /** Tenta achar no cache a cidade pedida; se não achar, cai para qualquer dado salvo. */
+    private void buscarDoCachePorNomeAproximado(String cidade, Callback callback) {
+        List<Previsao> previsoes = dbHelper.listarPorCidade(cidade);
+        if (previsoes != null && !previsoes.isEmpty()) {
+            notificarSucesso(callback, previsoes, true);
+        } else {
+            buscarDoCache(callback);
         }
-        Log.d(TAG, previsoes.size() + " previsões salvas no banco.");
+    }
+
+    /**
+     * Salva as previsões da cidade pesquisada, apagando somente os dados
+     * antigos DAQUELA cidade (preservando as outras em cache), e depois
+     * garante que só as MAX_CIDADES_CACHE cidades mais recentes permaneçam
+     * salvas no banco.
+     */
+    private void salvarNoBanco(String cidade, List<Previsao> previsoes) {
+        dbHelper.deletarPorCidade(cidade);
+        for (int i = 0; i < previsoes.size(); i++) {
+            // O primeiro item da lista é sempre o clima atual/"hoje" daquela cidade
+            dbHelper.inserir(previsoes.get(i), i == 0);
+        }
+        dbHelper.limparCidadesAntigas(MAX_CIDADES_CACHE);
+        Log.d(TAG, previsoes.size() + " previsões salvas no banco para " + cidade);
     }
 
     private boolean isOnline() {

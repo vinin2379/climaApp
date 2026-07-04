@@ -3,10 +3,12 @@ package com.example.climaoff;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -27,10 +29,11 @@ public class MainActivity extends AppCompatActivity {
     private Button      btnBuscar;
     private TextView    tvCidade, tvData, tvTemperaturaAtual,
                         tvDescricao, tvUmidade, tvVento, tvMinMax, tvIconePrincipal,
-                        tvStatusOffline;
+                        tvStatusOffline, tvUltimasCidadesTitulo;
     private ProgressBar progressBar;
     private RecyclerView rvPrevisoes;
     private PrevisaoAdapter adapter;
+    private LinearLayout containerUltimasCidades;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,22 +48,25 @@ public class MainActivity extends AppCompatActivity {
 
         // Carrega São Paulo como cidade padrão na abertura
         buscarPorCoordenadas("São Paulo", -23.5505, -46.6333);
+        atualizarUltimasCidades();
     }
 
     private void inicializarComponentes() {
-        etBuscaCidade      = findViewById(R.id.etBuscaCidade);
-        btnBuscar          = findViewById(R.id.btnBuscar);
-        tvCidade           = findViewById(R.id.tvCidade);
-        tvData             = findViewById(R.id.tvData);
-        tvTemperaturaAtual = findViewById(R.id.tvTemperaturaAtual);
-        tvDescricao        = findViewById(R.id.tvDescricao);
-        tvUmidade          = findViewById(R.id.tvUmidade);
-        tvVento            = findViewById(R.id.tvVento);
-        tvMinMax           = findViewById(R.id.tvMinMax);
-        tvIconePrincipal   = findViewById(R.id.tvIconePrincipal);
-        progressBar        = findViewById(R.id.progressBar);
-        tvStatusOffline    = findViewById(R.id.tvStatusOffline);
-        rvPrevisoes        = findViewById(R.id.rvPrevisoes);
+        etBuscaCidade           = findViewById(R.id.etBuscaCidade);
+        btnBuscar               = findViewById(R.id.btnBuscar);
+        tvCidade                = findViewById(R.id.tvCidade);
+        tvData                  = findViewById(R.id.tvData);
+        tvTemperaturaAtual      = findViewById(R.id.tvTemperaturaAtual);
+        tvDescricao             = findViewById(R.id.tvDescricao);
+        tvUmidade               = findViewById(R.id.tvUmidade);
+        tvVento                 = findViewById(R.id.tvVento);
+        tvMinMax                = findViewById(R.id.tvMinMax);
+        tvIconePrincipal        = findViewById(R.id.tvIconePrincipal);
+        progressBar             = findViewById(R.id.progressBar);
+        tvStatusOffline         = findViewById(R.id.tvStatusOffline);
+        rvPrevisoes             = findViewById(R.id.rvPrevisoes);
+        tvUltimasCidadesTitulo  = findViewById(R.id.tvUltimasCidadesTitulo);
+        containerUltimasCidades = findViewById(R.id.containerUltimasCidades);
     }
 
     private void configurarBusca() {
@@ -120,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 exibirPrevisoes(previsoes);
+                atualizarUltimasCidades();
             }
 
             @Override
@@ -157,6 +164,53 @@ public class MainActivity extends AppCompatActivity {
         } else {
             adapter.atualizarDados(proximosDias);
         }
+    }
+
+    /**
+     * Busca no repositório as últimas cidades pesquisadas (cache) e monta
+     * os "chips" clicáveis acima da barra de busca.
+     */
+    private void atualizarUltimasCidades() {
+        repository.buscarResumoCidadesRecentes(resumos -> {
+            containerUltimasCidades.removeAllViews();
+
+            if (resumos == null || resumos.isEmpty()) {
+                tvUltimasCidadesTitulo.setVisibility(View.GONE);
+                containerUltimasCidades.setVisibility(View.GONE);
+                return;
+            }
+
+            tvUltimasCidadesTitulo.setVisibility(View.VISIBLE);
+            containerUltimasCidades.setVisibility(View.VISIBLE);
+
+            for (Previsao p : resumos) {
+                containerUltimasCidades.addView(criarChipCidade(p));
+            }
+        });
+    }
+
+    private TextView criarChipCidade(Previsao p) {
+        TextView chip = new TextView(this);
+        chip.setText(converterIconeParaEmoji(p.getIcone()) + " " + p.getCidade()
+                + "  " + String.format("%.0f°", p.getTemperaturaAtual()));
+        chip.setTextSize(12);
+        chip.setTextColor(getResources().getColor(R.color.text_primary));
+        chip.setBackgroundColor(getResources().getColor(R.color.card_bg));
+        chip.setPadding(28, 16, 28, 16);
+        chip.setSingleLine(true);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMarginEnd(8);
+        chip.setLayoutParams(lp);
+
+        chip.setOnClickListener(v -> {
+            mostrarLoading(true);
+            tvStatusOffline.setVisibility(View.GONE);
+            repository.buscarPrevisoesDoCache(p.getCidade(), criarCallback());
+        });
+
+        return chip;
     }
 
     private void mostrarLoading(boolean mostrar) {

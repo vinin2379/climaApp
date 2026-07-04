@@ -47,6 +47,32 @@
 
         </LinearLayout>
 
+        <!-- Últimas cidades pesquisadas (chips clicáveis, carregam do cache) -->
+        <TextView
+            android:id="@+id/tvUltimasCidadesTitulo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="Últimas cidades"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/containerUltimasCidades"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+
+        </HorizontalScrollView>
+
         <!-- Banner de status offline -->
         <TextView
             android:id="@+id/tvStatusOffline"
